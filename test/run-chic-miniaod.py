@@ -9,7 +9,7 @@ process.load('Configuration.StandardSequences.MagneticField_38T_cff')
 process.load('Configuration.StandardSequences.Reconstruction_cff')
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_condDBv2_cff')
 from Configuration.AlCa.GlobalTag_condDBv2 import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, '92X_dataRun2_Prompt_v4', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, '92X_dataRun2_Prompt_v11', '')
 
 process.load("FWCore.MessageLogger.MessageLogger_cfi")
 process.MessageLogger.cerr.FwkReport.reportEvery = 20000
@@ -30,7 +30,7 @@ process.oniaSelectedMuons = cms.EDFilter('PATMuonSelector',
                     ' && innerTrack.hitPattern.trackerLayersWithMeasurement > 5'
                     ' && innerTrack.hitPattern.pixelLayersWithMeasurement > 0'
                     ' && innerTrack.quality(\"highPurity\")'
-                    ' && (abs(eta) <= 1.4 && pt > 4.)'
+                    # ' && (abs(eta) <= 1.4 && pt > 4.)'
    ),
    filter = cms.bool(True)
 )
@@ -46,7 +46,8 @@ process.onia2MuMuPAT.addMCTruth = cms.bool(False)
 
 process.triggerSelection = cms.EDFilter("TriggerResultsFilter",
                                         triggerConditions = cms.vstring('HLT_Dimuon20_Jpsi_Barrel_Seagulls_v*',
-                                                                        'HLT_Dimuon25_Jpsi_v*'
+                                                                        'HLT_Dimuon25_Jpsi_v*',
+                                                                        'HLT_Dimuon25_Jpsi_noCorrL1_v*',
                                                                        ),
                                         hltResults = cms.InputTag( "TriggerResults", "", "HLT" ),
                                         l1tResults = cms.InputTag( "" ),
@@ -56,11 +57,12 @@ process.triggerSelection = cms.EDFilter("TriggerResultsFilter",
 process.Onia2MuMuFiltered = cms.EDProducer('DiMuonFilter',
       OniaTag             = cms.InputTag("onia2MuMuPAT"),
       singlemuonSelection = cms.string(""),             
-      dimuonSelection     = cms.string("2.9 < mass && mass < 3.3 && pt > 20. && abs(y) < 1.2 && charge==0 && userFloat('vProb') > 0.01"),
+      dimuonSelection     = cms.string("2.9 < mass && mass < 3.3 && pt > 20. && charge==0 && userFloat('vProb') > 0.01"),
       do_trigger_match    = cms.bool(True),
       HLTFilters          = cms.vstring(
                 'hltDisplacedmumuFilterDimuon20JpsiBarrelnoCow',
-                'hltDisplacedmumuFilterDimuon25Jpsis'
+                'hltDisplacedmumuFilterDimuon25Jpsis',
+                'hltDisplacedmumuFilterDimuon25JpsisNoCorrL1'
                           ),
 )
 
@@ -82,7 +84,7 @@ process.chiProducer = cms.EDProducer('OniaPhotonProducer',
 process.chiFitter1S = cms.EDProducer('OniaPhotonKinematicFit',
                           chi_cand = cms.InputTag("chiProducer"),
                           upsilon_mass = cms.double(3.0969), # GeV   1S = 9.46030   2S = 10.02326    3S = 10.35520  J/psi=3.0969
-                          product_name = cms.string("y1S")
+                          product_name = cms.string("psi1S")
                          )
 
 process.chiSequence = cms.Sequence(
@@ -99,10 +101,16 @@ process.chiSequence = cms.Sequence(
 process.rootuple = cms.EDAnalyzer('chicRootupler',
                           chi_cand = cms.InputTag("chiProducer"),
 			  ups_cand = cms.InputTag("Onia2MuMuFiltered"),
-                          refit1S  = cms.InputTag("chiFitter1S","y1S"),
+                          refit1S  = cms.InputTag("chiFitter1S","psi1S"),
                           primaryVertices = cms.InputTag("offlineSlimmedPrimaryVertices"),
                           TriggerResults  = cms.InputTag("TriggerResults", "", "HLT"),
-                          isMC = cms.bool(False)
+                          TriggerPaths = cms.vstring(
+                              'HLT_Dimuon20_Jpsi_Barrel_Seagulls',
+                              'HLT_Dimuon25_Jpsi',
+                              'HLT_Dimuon25_Jpsi_noCorrL1'
+                          ),
+                          isMC = cms.bool(False),
+                          dimuonTree = cms.bool(False)
                          )
 
 process.p = cms.Path(process.chiSequence*process.rootuple)

@@ -45,8 +45,10 @@ class chicRootupler:public edm::EDAnalyzer {
         edm::EDGetTokenT<pat::CompositeCandidateCollection> refit1_;
         edm::EDGetTokenT<reco::VertexCollection>            primaryVertices_;
         edm::EDGetTokenT<edm::TriggerResults>               triggerResults_;
+  std::vector<std::string> triggerPaths_;
 
 	bool isMC_;
+  bool dimuonTree_;
 
 	UInt_t    run;
         ULong64_t event;
@@ -115,7 +117,9 @@ ups_(consumes<pat::CompositeCandidateCollection>(iConfig.getParameter < edm::Inp
 refit1_(consumes<pat::CompositeCandidateCollection>(iConfig.getParameter < edm::InputTag > ("refit1S"))),
 primaryVertices_(consumes<reco::VertexCollection>(iConfig.getParameter < edm::InputTag > ("primaryVertices"))),
 triggerResults_(consumes<edm::TriggerResults>(iConfig.getParameter < edm::InputTag > ("TriggerResults"))), 
-isMC_(iConfig.getParameter < bool > ("isMC"))
+triggerPaths_(iConfig.getParameter<std::vector<std::string>>("TriggerPaths")),
+isMC_(iConfig.getParameter < bool > ("isMC")),
+dimuonTree_(iConfig.getParameter<bool>("dimuonTree"))
 {
     edm::Service < TFileService > fs;
     chib_tree = fs->make < TTree > ("chiTree", "Tree of chic");
@@ -157,17 +161,19 @@ isMC_(iConfig.getParameter < bool > ("isMC"))
        chib_tree->Branch("gen_dimuon_p4", "TLorentzVector",  &gen_dimuon_p4);
        chib_tree->Branch("gen_photon_p4", "TLorentzVector",  &gen_photon_p4);
        chib_tree->Branch("gen_muonP_p4",  "TLorentzVector",  &gen_muonP_p4);
-       chib_tree->Branch("gen_muonM_p4",  "TLorentzVector",  &gen_muonM_p4);
+       chib_tree->Branch("gen_muonN_p4",  "TLorentzVector",  &gen_muonM_p4);
     }
     genCands_ = consumes<reco::GenParticleCollection>((edm::InputTag)"prunedGenParticles");
 
-    upsilon_tree = fs->make<TTree>("psiTree","Tree of Jpsi");
-    upsilon_tree->Branch("mumu_p4",  "TLorentzVector", &mumu_p4);
-    upsilon_tree->Branch("muP_p4",   "TLorentzVector", &muP_p4);
-    upsilon_tree->Branch("muM_p4",   "TLorentzVector", &muM_p4);
-    upsilon_tree->Branch("trigger",  &trigger,         "trigger/i");
-    upsilon_tree->Branch("numPrimaryVertices", &numPrimaryVertices, "numPrimaryVertices/i");
-    upsilon_tree->Branch("mumu_rank",&mumu_rank,       "mumu_rank/i"); 
+    if (dimuonTree_) {
+      upsilon_tree = fs->make<TTree>("psiTree","Tree of Jpsi");
+      upsilon_tree->Branch("mumu_p4",  "TLorentzVector", &mumu_p4);
+      upsilon_tree->Branch("muP_p4",   "TLorentzVector", &muP_p4);
+      upsilon_tree->Branch("muM_p4",   "TLorentzVector", &muM_p4);
+      upsilon_tree->Branch("trigger",  &trigger,         "trigger/i");
+      upsilon_tree->Branch("numPrimaryVertices", &numPrimaryVertices, "numPrimaryVertices/i");
+      upsilon_tree->Branch("mumu_rank",&mumu_rank,       "mumu_rank/i");
+    }
 }
 
 //Check recursively if any ancestor of particle is the given one
@@ -267,16 +273,11 @@ void chicRootupler::analyze(const edm::Event & iEvent, const edm::EventSetup & i
    trigger = 0;
    if (triggerResults_handle.isValid()) {
       const edm::TriggerNames & TheTriggerNames = iEvent.triggerNames(*triggerResults_handle);
-      unsigned int NTRIGGERS = 7;
-      std::string TriggersToTest[NTRIGGERS] = {
-	      "HLT_Dimuon20_Jpsi_Barrel_Seagulls","HLT_Dimuon25_Jpsi",
-	      "HLT_Dimuon10_PsiPrime_Barrel_Seagulls","HLT_Dimuon18_PsiPrime",
-	      "HLT_Dimuon10_Upsilon_Barrel_Seagulls","HLT_Dimuon12_Upsilon_eta1p5","HLT_Dimuon14_Phi_Barrel_Seagulls"};
-       
-      for (unsigned int i = 0; i < NTRIGGERS; i++) {
+
+        for (unsigned int i = 0; i < triggerPaths_.size(); i++) {
          for (int version = 1; version < 19; version++) {
             std::stringstream ss;
-            ss << TriggersToTest[i] << "_v" << version;
+            ss << triggerPaths_[i] << "_v" << version;
             unsigned int bit = TheTriggerNames.triggerIndex(edm::InputTag(ss.str()).label());
             if (bit < triggerResults_handle->size() && triggerResults_handle->accept(bit) && !triggerResults_handle->error(bit)) {
                trigger += (1<<i);
@@ -359,26 +360,28 @@ void chicRootupler::analyze(const edm::Event & iEvent, const edm::EventSetup & i
            rf1S_rank++;
 	}		// for i on chi_cand_handle
     } //else std::cout << "no valid chi handle" << std::endl;
-    
-    mumu_rank = 0;
-    if (ups_hand.isValid() && !ups_hand->empty()) {
-      for (unsigned int i=0; i< ups_hand->size(); i++) {
-        pat::CompositeCandidate ups_ = ups_hand->at(i);
-        mumu_p4.SetPtEtaPhiM(ups_.pt(), ups_.eta(), ups_.phi(), ups_.mass());
 
-        reco::Candidate::LorentzVector vP = ups_.daughter("muon1")->p4();
-        reco::Candidate::LorentzVector vM = ups_.daughter("muon2")->p4();
-        if (ups_.daughter("muon1")->charge() < 0) {
-           vP = ups_.daughter("muon2")->p4();
-           vM = ups_.daughter("muon1")->p4();
+    if (dimuonTree_) {
+      mumu_rank = 0;
+      if (ups_hand.isValid() && !ups_hand->empty()) {
+        for (unsigned int i=0; i< ups_hand->size(); i++) {
+          pat::CompositeCandidate ups_ = ups_hand->at(i);
+          mumu_p4.SetPtEtaPhiM(ups_.pt(), ups_.eta(), ups_.phi(), ups_.mass());
+
+          reco::Candidate::LorentzVector vP = ups_.daughter("muon1")->p4();
+          reco::Candidate::LorentzVector vM = ups_.daughter("muon2")->p4();
+          if (ups_.daughter("muon1")->charge() < 0) {
+            vP = ups_.daughter("muon2")->p4();
+            vM = ups_.daughter("muon1")->p4();
+          }
+
+          muP_p4.SetPtEtaPhiM(vP.pt(), vP.eta(), vP.phi(), vP.mass());
+          muM_p4.SetPtEtaPhiM(vM.pt(), vM.eta(), vM.phi(), vM.mass());
+          upsilon_tree->Fill();
+          mumu_rank++;
         }
-
-        muP_p4.SetPtEtaPhiM(vP.pt(), vP.eta(), vP.phi(), vP.mass());
-        muM_p4.SetPtEtaPhiM(vM.pt(), vM.eta(), vM.phi(), vM.mass());
-        upsilon_tree->Fill();
-        mumu_rank++;
       }
-    } 
+    }
 }
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
