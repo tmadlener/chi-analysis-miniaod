@@ -131,7 +131,7 @@ dimuonTree_(iConfig.getParameter<bool>("dimuonTree"))
     chib_tree->Branch("chi_p4",    "TLorentzVector", &chi_p4);
     chib_tree->Branch("dimuon_p4", "TLorentzVector", &dimuon_p4);
     chib_tree->Branch("muonP_p4",  "TLorentzVector", &muonP_p4);
-    chib_tree->Branch("muonM_p4",  "TLorentzVector", &muonM_p4);
+    chib_tree->Branch("muonN_p4",  "TLorentzVector", &muonM_p4);
     chib_tree->Branch("photon_p4", "TLorentzVector", &photon_p4);
 
     chib_tree->Branch("rf1S_chi_p4", "TLorentzVector", &rf1S_chi_p4);
